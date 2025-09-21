@@ -1,0 +1,61 @@
+using UnityEngine;
+
+public class ObstacleSpawnerPooling : MonoBehaviour
+{
+    public Transform player;
+    public float spawnDistance = 40f;   // how far ahead to spawn
+    public float laneDistance = 2f;
+    public float segmentLength = 5f;    // distance between segments
+
+    private float nextSpawnZ = 0f;
+
+    private void Start()
+    {
+        if (player != null)
+            nextSpawnZ = player.position.z + spawnDistance;
+    }
+
+    private void Update()
+    {
+        if (player == null) return;
+
+        if (player.position.z + spawnDistance > nextSpawnZ)
+        {
+            SpawnSegment(nextSpawnZ);
+            nextSpawnZ += segmentLength;
+        }
+    }
+
+    void SpawnSegment(float zPos)
+    {
+        int lanes = 3;
+
+        for (int lane = 0; lane < lanes; lane++)
+        {
+            float rand = Random.value;
+
+            if (rand < 0.25f) // 25% obstacle
+            {
+                Vector3 pos = new Vector3((lane - 1) * laneDistance, 0.5f, zPos + Random.Range(-1f, 1f));
+                ObjectPool.Instance.SpawnFromPool("Obstacle", pos, Quaternion.identity);
+            }
+            else if (rand < 0.40f) // ~15% coin
+            {
+                Vector3 pos = new Vector3((lane - 1) * laneDistance, 0.5f, zPos + Random.Range(-0.5f, 0.5f));
+                ObjectPool.Instance.SpawnFromPool("Coin", pos, Quaternion.identity);
+            }
+        }
+    }
+
+    // Optional: reset spawner state when restart
+    public void ResetSpawner()
+    {
+        if (player != null)
+            nextSpawnZ = player.position.z + spawnDistance;
+        if (ObjectPool.Instance != null)
+        {
+            ObjectPool.Instance.DeactivateAll("Obstacle");
+            ObjectPool.Instance.DeactivateAll("Coin");
+        }
+    }
+}

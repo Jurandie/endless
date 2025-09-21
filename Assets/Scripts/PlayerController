@@ -1,0 +1,184 @@
+using UnityEngine;
+using System.Collections;
+
+[RequireComponent(typeof(CharacterController))]
+public class PlayerController : MonoBehaviour
+{
+    [Header("Movement")]
+    public float forwardSpeed = 0f;         // set to 0 initially; GameManager sets when Start
+    public float laneDistance = 2f;         // distance between lanes
+    public float laneChangeSpeed = 8f;
+    public float jumpForce = 10f;
+    public float gravity = -20f;
+    public float slideTime = 1f;
+
+    private CharacterController cc;
+    private int currentLane = 1; // 0 left, 1 center, 2 right
+    private Vector3 moveVector;
+    private float verticalVelocity = 0f;
+    private bool isSliding = false;
+    private Vector3 originalCenter;
+    private float originalHeight;
+
+    // Swipe detection
+    private Vector2 startTouch;
+    private bool swipeDetected = false;
+    private float minSwipeDistance = 50f; // pixel
+
+    private void Start()
+    {
+        cc = GetComponent<CharacterController>();
+        originalCenter = cc.center;
+        originalHeight = cc.height;
+    }
+
+    private void Update()
+    {
+        // if game over or no movement, do not move forward
+        if (GameManager.Instance != null && GameManager.Instance.IsGameOver)
+        {
+            // optionally idle animations
+            return;
+        }
+
+        // forward
+        moveVector = Vector3.forward * forwardSpeed;
+
+        // horizontal: smooth movement to target lane
+        float targetX = (currentLane - 1) * laneDistance;
+        float diffX = targetX - transform.localPosition.x;
+        float horizontal = Mathf.Clamp(diffX * laneChangeSpeed, -laneDistance * laneChangeSpeed, laneDistance * laneChangeSpeed);
+        moveVector.x = horizontal;
+
+        // gravity & jump
+        if (cc.isGrounded)
+        {
+            if (verticalVelocity < 0) verticalVelocity = -1f;
+        }
+        verticalVelocity += gravity * Time.deltaTime;
+        moveVector.y = verticalVelocity;
+
+        // move character
+        cc.Move(moveVector * Time.deltaTime);
+
+        // input (touch + mouse)
+        HandleInput();
+    }
+
+    private void HandleInput()
+    {
+        // Touch input
+        if (Input.touchCount == 1)
+        {
+            Touch t = Input.GetTouch(0);
+            if (t.phase == TouchPhase.Began)
+            {
+                startTouch = t.position;
+                swipeDetected = true;
+            }
+            else if (t.phase == TouchPhase.Moved && swipeDetected)
+            {
+                Vector2 diff = t.position - startTouch;
+                if (Mathf.Abs(diff.x) > Mathf.Abs(diff.y) && Mathf.Abs(diff.x) > minSwipeDistance)
+                {
+                    if (diff.x > 0) MoveRight(); else MoveLeft();
+                    swipeDetected = false;
+                }
+                else if (Mathf.Abs(diff.y) > minSwipeDistance)
+                {
+                    if (diff.y > 0) Jump(); else Slide();
+                    swipeDetected = false;
+                }
+            }
+            else if (t.phase == TouchPhase.Ended)
+            {
+                swipeDetected = false;
+            }
+        }
+
+        // Mouse/editor support
+        if (Input.GetMouseButtonDown(0))
+        {
+            startTouch = Input.mousePosition;
+            swipeDetected = true;
+        }
+        else if (Input.GetMouseButtonUp(0) && swipeDetected)
+        {
+            Vector2 end = Input.mousePosition;
+            Vector2 diff = end - startTouch;
+            if (Mathf.Abs(diff.x) > Mathf.Abs(diff.y) && Mathf.Abs(diff.x) > minSwipeDistance)
+            {
+                if (diff.x > 0) MoveRight(); else MoveLeft();
+            }
+            else if (Mathf.Abs(diff.y) > minSwipeDistance)
+            {
+                if (diff.y > 0) Jump(); else Slide();
+            }
+            swipeDetected = false;
+        }
+
+        // optional keyboard for testing
+        if (Input.GetKeyDown(KeyCode.LeftArrow)) MoveLeft();
+        if (Input.GetKeyDown(KeyCode.RightArrow)) MoveRight();
+        if (Input.GetKeyDown(KeyCode.UpArrow)) Jump();
+        if (Input.GetKeyDown(KeyCode.DownArrow)) Slide();
+    }
+
+    public void MoveLeft()
+    {
+        if (isSliding) return;
+        currentLane = Mathf.Clamp(currentLane - 1, 0, 2);
+    }
+
+    public void MoveRight()
+    {
+        if (isSliding) return;
+        currentLane = Mathf.Clamp(currentLane + 1, 0, 2);
+    }
+
+    public void Jump()
+    {
+        if (cc.isGrounded && !isSliding)
+        {
+            verticalVelocity = Mathf.Sqrt(jumpForce * -2f * gravity);
+        }
+    }
+
+    public void Slide()
+    {
+        if (!isSliding && cc.isGrounded)
+        {
+            StartCoroutine(DoSlide());
+        }
+    }
+
+    private IEnumerator DoSlide()
+    {
+        isSliding = true;
+        cc.height = originalHeight / 2f;
+        cc.center = originalCenter - new Vector3(0, originalHeight / 4f, 0);
+        yield return new WaitForSeconds(slideTime);
+        cc.height = originalHeight;
+        cc.center = originalCenter;
+        isSliding = false;
+    }
+
+    private void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+        if (hit.collider.CompareTag("Obstacle"))
+        {
+            GameManager.Instance.GameOver();
+            AudioManager.Instance?.PlayHit(); // optional audio
+        }
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.CompareTag("Coin"))
+        {
+            GameManager.Instance.CollectCoin();
+            other.gameObject.SetActive(false);
+            AudioManager.Instance?.PlayCoin();
+        }
+    }
+}

@@ -1,0 +1,54 @@
+using UnityEngine;
+using UnityEngine.UI;
+
+public class GameManager : MonoBehaviour
+{
+    public static GameManager Instance;
+
+    public Text scoreText;
+    public Text coinText;
+    public GameObject gameOverPanel;
+
+    private int score = 0;
+    private int coins = 0;
+
+    private void Awake()
+    {
+        Instance = this;
+    }
+
+    private void Start()
+    {
+        Application.targetFrameRate = 60;
+        Time.timeScale = 1f;
+        UpdateUI();
+    }
+
+    public void AddScore(int value)
+    {
+        score += value;
+        scoreText.text = "Score: " + score;
+    }
+
+    public void AddCoin(int value)
+    {
+        coins += value;
+        coinText.text = "Coins: " + coins;
+    }
+
+    private void UpdateUI()
+    {
+        scoreText.text = "Score: " + score;
+        coinText.text = "Coins: " + coins;
+    }
+
+    // 🚨 Método que estava faltando
+    public void GameOver()
+    {
+        Debug.Log("Game Over!");
+        Time.timeScale = 0f;
+
+        if (gameOverPanel != null)
+            gameOverPanel.SetActive(true);
+    }
+}
